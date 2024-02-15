@@ -1,2 +1,2 @@
-from .util import detect_device
-from .moondream import Moondream
+from .vision_encoder import VisionEncoder
+from .text_model import TextModel

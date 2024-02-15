@@ -1,43 +1,19 @@
-import argparse
-import torch
 import re
 import gradio as gr
-from moondream import Moondream, detect_device
+from moondream import VisionEncoder, TextModel
+from huggingface_hub import snapshot_download
 from threading import Thread
-from transformers import TextIteratorStreamer, CodeGenTokenizerFast as Tokenizer
+from transformers import TextIteratorStreamer
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--cpu", action="store_true")
-args = parser.parse_args()
+model_path = snapshot_download("vikhyatk/moondream1")
+vision_encoder = VisionEncoder(model_path)
+text_model = TextModel(model_path)
 
-if args.cpu:
-    device = torch.device("cpu")
-    dtype = torch.float32
-else:
-    device, dtype = detect_device()
-    if device != torch.device("cpu"):
-        print("Using device:", device)
-        print("If you run into issues, pass the `--cpu` flag to this script.")
-        print()
-
-model_id = "vikhyatk/moondream1"
-tokenizer = Tokenizer.from_pretrained(model_id)
-moondream = Moondream.from_pretrained(model_id).to(device=device, dtype=dtype)
-moondream.eval()
-
-
-def answer_question(img, prompt):
-    image_embeds = moondream.encode_image(img)
-    streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True)
-    thread = Thread(
-        target=moondream.answer_question,
-        kwargs={
-            "image_embeds": image_embeds,
-            "question": prompt,
-            "tokenizer": tokenizer,
-            "streamer": streamer,
-        },
-    )
+def moondream(img, prompt):
+    image_embeds = vision_encoder(img)
+    streamer = TextIteratorStreamer(text_model.tokenizer, skip_special_tokens=True)
+    thread = Thread(target=text_model.answer_question, kwargs={
+        "image_embeds": image_embeds, "question": prompt, "streamer": streamer})
     thread.start()
 
     buffer = ""
@@ -46,21 +22,15 @@ def answer_question(img, prompt):
         buffer += clean_text
         yield buffer.strip("<END")
 
-
 with gr.Blocks() as demo:
-    gr.Markdown(
-        """
-        # 🌔 moondream
-        ### A tiny vision language model. [GitHub](https://github.com/vikhyat/moondream)
-        """
-    )
+    gr.Markdown("# 🌔 moondream \n ### A tiny vision language model. [GitHub](https://github.com/vikhyat/moondream)")
     with gr.Row():
-        prompt = gr.Textbox(label="Input Prompt", placeholder="Type here...", scale=4)
-        submit = gr.Button("Submit")
+        prompt = gr.Textbox(label='Input Prompt', placeholder='Type here...', scale=4)
+        submit = gr.Button('Submit')
     with gr.Row():
-        img = gr.Image(type="pil", label="Upload an Image")
-        output = gr.TextArea(label="Response")
-    submit.click(answer_question, [img, prompt], output)
-    prompt.submit(answer_question, [img, prompt], output)
+        img = gr.Image(type='pil', label='Upload an Image')
+        output = gr.TextArea(label="Response", info='Please wait for a few seconds..')
+    submit.click(moondream, [img, prompt], output)
+    prompt.submit(moondream, [img, prompt], output)
 
 demo.queue().launch(debug=True)
