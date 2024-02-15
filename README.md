@@ -1,3 +1,5 @@
+## commit 38af98596e59f2a6c25c6b52b2bd5a672dab4144
+
 # 🌔 moondream
 
 a tiny vision language model that kicks ass and runs anywhere
